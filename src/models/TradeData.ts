@@ -44,7 +44,7 @@ const TradeDataSchema = new mongoose.Schema({
   'BL Date': { type: String },
   'PORT': { type: String },
   'B/E TYPE': { type: String },
-  'Machine No': { type: Number },
+  'Machine No': { type: String },
   'GD Number': { type: String },
   'BE DATE': { type: String },
   'Item No': { type: String },
@@ -77,7 +77,7 @@ const TradeDataSchema = new mongoose.Schema({
     index: true
   },
   
-  // Parsed dates (for better querying)
+  // Parsed dates and period metadata
   parsedIGMDate: { 
     type: Date, 
     index: true 
@@ -86,6 +86,27 @@ const TradeDataSchema = new mongoose.Schema({
     type: Date,
     index: true
   },
+  hsCodeNormalized: { type: String, index: true },
+  hsChapter: { type: String, index: true },
+  hsCodeConfidence: { type: String, enum: ['high', 'low', null] },
+  isPolymer: { type: Boolean, index: true },
+  periodYear: { type: Number, index: true },
+  periodMonth: { type: Number, index: true },
+  periodKey: { type: String, index: true },
+  periodLabel: { type: String },
+  sourceFormat: { type: String, enum: ['A', 'C', 'D', 'unknown', null] },
+  sourceFile: { type: String },
+  importBatchId: { type: String },
+  gdSerial: { type: String },
+  weightUnit: { type: String },
+  consignorShortName: { type: String },
+  assessedUnitValue: { type: String },
+  declaredUnitValue: { type: String },
+  splFed: { type: String },
+  gst: { type: String },
+  others: { type: String },
+  channel: { type: String },
+  chapter: { type: String },
 }, {
   timestamps: true,
   strict: false, // Allow custom fields
@@ -96,5 +117,7 @@ TradeDataSchema.index({ normalizedGrade: 1, 'CASH DATE': -1 });
 TradeDataSchema.index({ polymerType: 1, gradeCode: 1 });
 TradeDataSchema.index({ normalizedGrade: 1, 'Importer Name': 1 });
 TradeDataSchema.index({ 'Importer Name': 1, normalizedGrade: 1 });
+TradeDataSchema.index({ isPolymer: 1, periodYear: 1, periodMonth: 1 });
+TradeDataSchema.index({ periodKey: 1 });
 
 export default mongoose.models.TradeData || mongoose.model('TradeData', TradeDataSchema);

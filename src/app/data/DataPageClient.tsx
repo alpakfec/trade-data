@@ -39,6 +39,9 @@ export default function DataPageClient() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [limit, setLimit] = useState(parseInt(searchParams.get('limit') || '10'));
+  const [dataType, setDataType] = useState(searchParams.get('dataType') || 'all');
+  const [period, setPeriod] = useState(searchParams.get('period') || '');
+  const [periodOptions, setPeriodOptions] = useState<Array<{ key: string; label: string; totalCount: number; polymerCount: number; nonPolymerCount: number }>>([]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -47,22 +50,47 @@ export default function DataPageClient() {
     }
   }, [status, router]);
 
+  const fetchPeriods = useCallback(async () => {
+    const response = await fetch(`/api/trade-data/periods?dataType=${encodeURIComponent(dataType)}`);
+    const result = await response.json();
+    const periods: Array<{ key: string; label: string; totalCount: number; polymerCount: number; nonPolymerCount: number }> = Array.isArray(result.periods) ? result.periods : [];
+    setPeriodOptions(periods);
+
+    if (period && !periods.some((item) => item.key === period)) {
+      setPeriod('');
+      const params = new URLSearchParams(searchParams);
+      params.delete('period');
+      params.set('page', '1');
+      router.push(`/data?${params}`);
+    }
+  }, [dataType, period, router, searchParams]);
+
   const fetchData = useCallback(async () => {
     if (status !== 'authenticated') return;
-    
+
     setLoading(true);
     const params = new URLSearchParams(searchParams);
-    
-    const response = await fetch(`/api/data?${params}`);
+    params.set('dataType', dataType);
+    if (period) {
+      params.set('period', period);
+    } else {
+      params.delete('period');
+    }
+
+    const response = await fetch(`/api/trade-data?${params}`);
     const result = await response.json();
-    setData(result.data);
-    setPagination(result.pagination);
+    setData(result.data ?? []);
+    setPagination(result.pagination ?? null);
     setLoading(false);
-  }, [searchParams, status]);
+  }, [dataType, period, searchParams, status]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    fetchPeriods();
+  }, [fetchPeriods]);
 
   // Close modal on Escape key (hook placed here so hooks order is stable across renders)
   useEffect(() => {
@@ -89,6 +117,8 @@ export default function DataPageClient() {
       params.delete('search');
     }
     params.set('page', '1');
+    params.set('dataType', dataType);
+    if (period) params.set('period', period);
     router.push(`/data?${params}`);
   };
 
@@ -100,6 +130,8 @@ export default function DataPageClient() {
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams(searchParams);
     params.set('page', page.toString());
+    params.set('dataType', dataType);
+    if (period) params.set('period', period);
     router.push(`/data?${params}`);
   };
 
@@ -111,6 +143,8 @@ export default function DataPageClient() {
     params.set('sortField', field);
     params.set('sortOrder', newOrder);
     params.set('page', '1');
+    params.set('dataType', dataType);
+    if (period) params.set('period', period);
     router.push(`/data?${params}`);
   };
 
@@ -119,6 +153,8 @@ export default function DataPageClient() {
     const params = new URLSearchParams(searchParams);
     params.set('limit', newLimit.toString());
     params.set('page', '1');
+    params.set('dataType', dataType);
+    if (period) params.set('period', period);
     router.push(`/data?${params}`);
   };
 
@@ -152,41 +188,90 @@ export default function DataPageClient() {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <form onSubmit={handleSearch} className="mb-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === 'Enter') {
-                    performSearch();
-                  }
-                }}
-                placeholder="Search by HS CODE, Item Description, Importer, Consignor, Origin, Port..."
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
-              />
-              <div className="flex gap-2 sm:gap-4">
-                <button
-                  type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
-                >
-                  Search
-                </button>
-                {searchInput && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter') {
+                      performSearch();
+                    }
+                  }}
+                  placeholder="Search by HS CODE, Item Description, Importer, Consignor, Origin, Port..."
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm sm:text-base"
+                />
+                <div className="flex gap-2 sm:gap-4">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setSearchInput('');
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
+                  >
+                    Search
+                  </button>
+                  {searchInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchInput('');
+                        const params = new URLSearchParams(searchParams);
+                        params.delete('search');
+                        params.set('page', '1');
+                        router.push(`/data?${params}`);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                {(periodOptions.some((item) => item.polymerCount > 0) && periodOptions.some((item) => item.nonPolymerCount > 0)) && (
+                  <select
+                    value={dataType}
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      setDataType(nextType);
                       const params = new URLSearchParams(searchParams);
-                      params.delete('search');
+                      params.set('dataType', nextType);
+                      params.delete('period');
                       params.set('page', '1');
+                      setPeriod('');
                       router.push(`/data?${params}`);
                     }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium flex-1 sm:flex-none"
+                    className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                   >
-                    Clear
-                  </button>
+                    <option value="all">All Data</option>
+                    <option value="polymer">Polymers</option>
+                    <option value="non-polymer">Non-Polymers</option>
+                  </select>
                 )}
+
+                <select
+                  value={period}
+                  onChange={(e) => {
+                    const nextPeriod = e.target.value;
+                    setPeriod(nextPeriod);
+                    const params = new URLSearchParams(searchParams);
+                    if (nextPeriod) {
+                      params.set('period', nextPeriod);
+                    } else {
+                      params.delete('period');
+                    }
+                    params.set('page', '1');
+                    router.push(`/data?${params}`);
+                  }}
+                  className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+                >
+                  <option value="">All periods</option>
+                  {periodOptions.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.label} ({item.totalCount})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </form>
